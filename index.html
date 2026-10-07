@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SLC · Location Tag Generator</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1B1E21">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SLC Tags">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --asphalt:#1B1E21;
+    --asphalt-2:#25292D;
+    --paper:#F3EEE1;
+    --paper-2:#EAE3D0;
+    --ink:#1B1E21;
+    --hazard:#2B2E82;
+    --hazard-dark:#1D1F5C;
+    --hazard-light:#8B90F0;
+    --steel:#7B8894;
+    --steel-light:#AAB4BD;
+    --line:#3A3F44;
+    --good:#4E8A63;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--asphalt);
+    background-image:
+      repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 40px);
+    color:var(--paper);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  .wrap{max-width:520px;margin:0 auto;}
+
+  /* header */
+  .eyebrow{
+    display:flex;align-items:center;gap:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--hazard-light);margin-bottom:6px;
+  }
+  .eyebrow::before{
+    content:"";width:10px;height:10px;background:var(--hazard-light);
+    display:inline-block;transform:rotate(45deg);
+  }
+  h1{
+    font-size:28px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em;
+    color:var(--paper);
+  }
+  .sub{color:var(--steel-light);font-size:14px;margin:0 0 24px;line-height:1.5;}
+  .sub b{color:var(--paper);font-weight:600;}
+
+  /* search panel */
+  .panel{
+    background:var(--asphalt-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    margin-bottom:18px;
+  }
+  .search-row{position:relative;}
+  .search-row input{
+    width:100%;
+    background:var(--asphalt);
+    border:1.5px solid var(--line);
+    color:var(--paper);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:16px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    padding:13px 44px 13px 14px;
+    border-radius:7px;
+    outline:none;
+    transition:border-color .15s;
+  }
+  .search-row input:focus{border-color:var(--hazard-light);}
+  .search-row input::placeholder{color:var(--steel);font-weight:400;letter-spacing:0;}
+  .search-row svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;}
+
+  .hint{font-size:12px;color:var(--steel);margin-top:8px;}
+
+  .sync-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin-top:2px;
+  }
+  .sync-row .hint{margin-top:0;flex:1;}
+  .sync-row .hint.ok{color:#5FA97A;}
+  .sync-row .hint.warn{color:var(--hazard-light);}
+  .sync-row .hint.err{color:#D9695F;}
+  .sync-refresh{
+    flex:none;
+    background:transparent;border:1px solid var(--line);color:var(--steel-light);
+    font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;font-weight:600;
+    padding:5px 10px;border-radius:6px;cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .sync-refresh:hover{border-color:var(--steel);color:var(--paper);}
+  .sync-refresh:disabled{opacity:0.5;cursor:default;}
+
+  .results{
+    margin-top:10px;
+    max-height:260px;
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:4px;
+  }
+  .results::-webkit-scrollbar{width:6px;}
+  .results::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  .zone-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
+    color:var(--steel);padding:8px 6px 2px;
+  }
+
+  .result-item{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px;
+    border-radius:6px;
+    cursor:pointer;
+    border:1px solid transparent;
+    transition:background .1s, border-color .1s;
+  }
+  .result-item:hover, .result-item.active{
+    background:rgba(43,46,130,0.14);
+    border-color:rgba(43,46,130,0.45);
+  }
+  .result-code{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14.5px;
+    color:var(--paper);letter-spacing:0.02em;
+  }
+  .result-meta{font-size:11px;color:var(--steel-light);}
+  .no-match{color:var(--steel);font-size:13px;padding:14px 6px;text-align:center;}
+
+  /* the tag */
+  #tagStage{display:none;}
+  .tag-card{
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:4px;
+    position:relative;
+    padding:22px 22px 18px;
+    box-shadow:0 14px 34px rgba(0,0,0,0.35);
+    overflow:hidden;
+  }
+  .tag-card::before{ /* hazard corner */
+    content:"";
+    position:absolute;top:0;left:0;
+    width:0;height:0;
+    border-style:solid;
+    border-width:0 0 46px 46px;
+    border-color:transparent transparent var(--hazard) transparent;
+  }
+  .perf{
+    position:absolute;top:0;left:0;right:0;height:14px;
+    background-image: radial-gradient(circle at 10px 7px, var(--asphalt) 3.5px, transparent 3.6px);
+    background-size:20px 14px;
+    background-repeat:repeat-x;
+    opacity:0.9;
+  }
+  .tag-top{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    margin-top:10px;margin-bottom:14px;
+  }
+  .tag-plant{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.1em;
+    color:var(--hazard-dark);font-weight:700;text-transform:uppercase;
+  }
+  .tag-plant span{display:block;color:var(--steel);font-weight:500;font-size:10px;letter-spacing:0.06em;margin-top:2px;}
+  .tag-type{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;
+    letter-spacing:0.08em;text-transform:uppercase;
+    background:var(--ink);color:var(--paper);
+    padding:4px 8px;border-radius:3px;
+  }
+
+  .tag-body{display:flex;align-items:center;gap:18px;}
+  .tag-code{
+    flex:1;min-width:0;
+  }
+  .tag-code .code{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:clamp(26px, 9vw, 40px);
+    line-height:1;
+    letter-spacing:-0.01em;
+    word-break:break-word;
+    color:var(--ink);
+  }
+  .tag-zone{
+    margin-top:10px;
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+    color:var(--steel);letter-spacing:0.04em;
+  }
+  .tag-zone .dot{width:7px;height:7px;border-radius:50%;background:var(--hazard-dark);}
+
+  #qrcode{
+    background:#fff;padding:8px;border-radius:6px;
+    border:1px solid rgba(0,0,0,0.08);
+    flex-shrink:0;
+  }
+  #qrcode img, #qrcode canvas{display:block;width:118px !important;height:118px !important;}
+
+  .tag-footer{
+    margin-top:16px;padding-top:12px;
+    border-top:1.5px dashed rgba(0,0,0,0.18);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .payload{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+    letter-spacing:0.05em;color:var(--steel);
+  }
+  .payload b{color:var(--ink);}
+
+  .actions{display:flex;gap:10px;margin-top:16px;}
+  .btn{
+    flex:1;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:12px 14px;border-radius:7px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;font-weight:600;
+    cursor:pointer;border:none;transition:transform .08s, background .15s;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn-primary{background:var(--hazard);color:var(--paper);}
+  .btn-primary:hover{background:#3A3E9E;}
+  .btn-ghost{background:var(--asphalt-2);color:var(--paper);border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--steel);}
+
+  .empty-note{
+    text-align:center;color:var(--steel);font-size:13px;
+    padding:30px 10px;border:1px dashed var(--line);border-radius:10px;
+  }
+
+  .install-banner{
+    margin-top:16px;
+    background:var(--asphalt-2);
+    border:1px solid var(--hazard-light);
+    border-radius:10px;
+    padding:14px 16px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+  }
+  .install-text{display:flex;flex-direction:column;gap:2px;}
+  .install-text strong{font-size:13.5px;color:var(--paper);}
+  .install-text span{font-size:12px;color:var(--steel-light);}
+
+  @media (max-width:380px){
+    #qrcode img, #qrcode canvas{width:96px !important;height:96px !important;}
+    .tag-body{gap:12px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SLC &middot; TLS SLC Warehouse</div>
+  <h1>Location Tag Generator</h1>
+  <p class="sub">Pick a location code and get a scannable tag. Payload format: <b>L~locationcode~</b></p>
+
+  <div class="panel">
+    <div class="search-row">
+      <input id="searchInput" type="text" placeholder="Type or scan a location code (e.g. D-05)" autocomplete="off">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7B8894" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </div>
+    <div class="hint" id="countHint"></div>
+    <div class="sync-row">
+      <span class="hint" id="syncStatus">Loading location list…</span>
+      <button id="syncRefreshBtn" class="sync-refresh" title="Re-check SharePoint now">Refresh</button>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div id="tagStage">
+    <div class="tag-card">
+      <div class="perf"></div>
+      <div class="tag-top">
+        <div class="tag-plant">SLC<span>TLS SLC Warehouse</span></div>
+        <div class="tag-type" id="tagType">—</div>
+      </div>
+      <div class="tag-body">
+        <div class="tag-code">
+          <div class="code" id="tagCode">—</div>
+          <div class="tag-zone"><span class="dot"></span><span id="tagZone">—</span></div>
+        </div>
+        <div id="qrcode"></div>
+      </div>
+      <div class="tag-footer">
+        <div class="payload">Scan payload: <b id="tagPayload">L~—~</b></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="downloadBtn">Download tag</button>
+      <button class="btn btn-ghost" id="printBtn">Print</button>
+    </div>
+  </div>
+
+  <div class="empty-note" id="emptyNote">Start typing a location code above — the QR tag will appear here.</div>
+
+  <div class="install-banner" id="installBanner" style="display:none;">
+    <div class="install-text">
+      <strong id="installTitle">Install this as an app</strong>
+      <span id="installSub">Adds a home-screen icon and works offline.</span>
+    </div>
+    <button class="btn btn-primary" id="installBtn" style="flex:none;padding:10px 16px;">Install</button>
+  </div>
+</div>
+
+<script>
+const FALLBACK_LOCATIONS = [];
+
+/* =========================================================================
+   LIVE DATA SOURCE -- SharePoint Excel file
+   =========================================================================
+   Paste your SharePoint "Anyone with the link - view only" URL below.
+   It must be a DIRECT DOWNLOAD link, not the normal viewer page:
+     1. In SharePoint: right-click the file -> Share -> "Anyone with the link"
+        -> Can view -> Copy link
+     2. Take that link and add "&download=1" to the end
+        (or "?download=1" if there is no "&" already)
+   Example shape:
+     https://yourcompany.sharepoint.com/:x:/s/site/XXXXXXXX?e=XXXX&download=1
+   Leave it as '' to skip live sync and just use the built-in list below.
+========================================================================= */
+const LOCATIONS_JSON_URL = './locations.json';
+const CACHE_KEY = 'slc_locations_cache_v1';
+
+let LOCATIONS = FALLBACK_LOCATIONS;
+;
+
+const searchInput = document.getElementById('searchInput');
+const resultsEl = document.getElementById('results');
+const countHint = document.getElementById('countHint');
+const tagStage = document.getElementById('tagStage');
+const emptyNote = document.getElementById('emptyNote');
+const tagCode = document.getElementById('tagCode');
+const tagZone = document.getElementById('tagZone');
+const tagType = document.getElementById('tagType');
+const tagPayload = document.getElementById('tagPayload');
+
+/* ---------- data loading: locations.json (kept in sync by Power Automate) -> local cache -> built-in fallback ---------- */
+const syncStatusEl = document.getElementById('syncStatus');
+const syncRefreshBtn = document.getElementById('syncRefreshBtn');
+
+function setSyncStatus(text, kind){
+  syncStatusEl.textContent = text;
+  syncStatusEl.className = 'hint' + (kind ? ' ' + kind : '');
+}
+
+function updateCountHint(){
+  countHint.textContent = LOCATIONS.length + ' location codes loaded';
+}
+
+function readCache(){
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(Array.isArray(parsed.data) && parsed.data.length) return parsed;
+  }catch(e){}
+  return null;
+}
+
+function writeCache(data){
+  try{
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  }catch(e){ /* storage full or unavailable — non-fatal, session data still works */ }
+}
+
+async function fetchLocationsJson(){
+  const resp = await fetch(LOCATIONS_JSON_URL, { cache: 'no-store' });
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  const data = await resp.json();
+  if(!Array.isArray(data) || !data.length) throw new Error('locations.json was empty or malformed');
+  return data;
+}
+
+async function syncLocations(isManualRefresh){
+  if(isManualRefresh){
+    syncRefreshBtn.disabled = true;
+    setSyncStatus('Checking for updates…');
+  }
+  try{
+    const fresh = await fetchLocationsJson();
+    LOCATIONS = fresh;
+    writeCache(fresh);
+    updateCountHint();
+    setSyncStatus('Up to date · ' + new Date().toLocaleString(), 'ok');
+  }catch(err){
+    const cached = readCache();
+    if(cached){
+      setSyncStatus('Couldn\u2019t refresh — showing last synced copy from ' + new Date(cached.savedAt).toLocaleString() + '.', 'warn');
+    } else {
+      if(LOCATIONS.length === 0){
+        setSyncStatus('No locations yet \u2014 waiting for the first sync from SharePoint.', 'warn');
+      } else {
+        setSyncStatus('Couldn\u2019t refresh — using built-in list. (' + err.message + ')', 'warn');
+      }
+    }
+  } finally {
+    if(isManualRefresh) syncRefreshBtn.disabled = false;
+  }
+}
+
+function initLocations(){
+  const cached = readCache();
+  if(cached){
+    LOCATIONS = cached.data;
+    setSyncStatus('Loaded cached copy from ' + new Date(cached.savedAt).toLocaleString() + ' — checking for updates…');
+  }
+  updateCountHint();
+  syncLocations(false);
+}
+
+syncRefreshBtn.addEventListener('click', () => syncLocations(true));
+initLocations();
+
+let qr = null;
+let activeIndex = -1;
+let currentMatches = [];
+
+function renderResults(query){
+  const q = query.trim().toUpperCase();
+  resultsEl.innerHTML = '';
+  activeIndex = -1;
+
+  if(!q){ currentMatches = []; return; }
+
+  const matches = LOCATIONS.filter(loc => loc.code.toUpperCase().includes(q));
+  currentMatches = matches;
+
+  if(matches.length === 0){
+    resultsEl.innerHTML = '<div class="no-match">No location code matches “' + query + '”.</div>';
+    return;
+  }
+
+  // group by zone for scanability
+  const groups = {};
+  matches.forEach(m => {
+    groups[m.zone] = groups[m.zone] || [];
+    groups[m.zone].push(m);
+  });
+
+  const frag = document.createDocumentFragment();
+  Object.keys(groups).sort().forEach(zone => {
+    const label = document.createElement('div');
+    label.className = 'zone-label';
+    label.textContent = zone;
+    frag.appendChild(label);
+
+    groups[zone].forEach(loc => {
+      const item = document.createElement('div');
+      item.className = 'result-item';
+      item.innerHTML = '<span class="result-code">' + loc.code + '</span>' +
+                        '<span class="result-meta">' + loc.type.replace('_',' ') + '</span>';
+      item.addEventListener('click', () => selectLocation(loc));
+      frag.appendChild(item);
+    });
+  });
+  resultsEl.appendChild(frag);
+}
+
+function selectLocation(loc){
+  emptyNote.style.display = 'none';
+  tagStage.style.display = 'block';
+
+  tagCode.textContent = loc.code;
+  tagZone.textContent = loc.zone === 'GENERAL' ? 'General storage' : loc.zone.replace('_',' ');
+  tagType.textContent = loc.type.replace('_',' ');
+  const payload = 'L~' + loc.code + '~';
+  tagPayload.textContent = payload;
+
+  const qrEl = document.getElementById('qrcode');
+  qrEl.innerHTML = '';
+  qr = new QRCode(qrEl, {
+    text: payload,
+    width: 118,
+    height: 118,
+    colorDark: '#1B1E21',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  searchInput.value = loc.code;
+  resultsEl.innerHTML = '';
+  tagStage.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+searchInput.addEventListener('input', (e) => renderResults(e.target.value));
+
+searchInput.addEventListener('keydown', (e) => {
+  const items = resultsEl.querySelectorAll('.result-item');
+  if(items.length === 0) return;
+
+  if(e.key === 'ArrowDown'){
+    e.preventDefault();
+    activeIndex = Math.min(activeIndex + 1, items.length - 1);
+    items.forEach(i => i.classList.remove('active'));
+    items[activeIndex].classList.add('active');
+    items[activeIndex].scrollIntoView({block:'nearest'});
+  } else if(e.key === 'ArrowUp'){
+    e.preventDefault();
+    activeIndex = Math.max(activeIndex - 1, 0);
+    items.forEach(i => i.classList.remove('active'));
+    items[activeIndex].classList.add('active');
+    items[activeIndex].scrollIntoView({block:'nearest'});
+  } else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(activeIndex >= 0 && currentMatches[activeIndex]){
+      selectLocation(currentMatches[activeIndex]);
+    } else {
+      // exact match fallback
+      const exact = LOCATIONS.find(l => l.code.toUpperCase() === searchInput.value.trim().toUpperCase());
+      if(exact) selectLocation(exact);
+    }
+  }
+});
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const canvas = document.querySelector('#qrcode canvas');
+  const img = document.querySelector('#qrcode img');
+  const code = tagCode.textContent;
+
+  // Build a printable tag on an off-screen canvas (label-sized, includes code + QR)
+  const W = 480, H = 260;
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const ctx = out.getContext('2d');
+
+  ctx.fillStyle = '#F3EEE1';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle = '#1D1F5C';
+  ctx.beginPath();
+  ctx.moveTo(0,0); ctx.lineTo(46,0); ctx.lineTo(0,46); ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#7B8894';
+  ctx.font = '600 13px monospace';
+  ctx.fillText('SLC  ·  TLS SLC WAREHOUSE', 24, 34);
+
+  ctx.fillStyle = '#1B1E21';
+  ctx.font = '700 54px monospace';
+  ctx.fillText(code, 24, 110);
+
+  ctx.fillStyle = '#7B8894';
+  ctx.font = '600 13px monospace';
+  ctx.fillText(tagZone.textContent + '  ·  ' + tagType.textContent, 24, 140);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(24, 170); ctx.lineTo(W-24, 170); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = '#7B8894';
+  ctx.font = '600 13px monospace';
+  ctx.fillText('Scan payload: L~' + code + '~', 24, 200);
+
+  const qrSource = canvas || img;
+  const qrSize = 160;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(W-qrSize-24, 24, qrSize, qrSize);
+  ctx.drawImage(qrSource, W-qrSize-24, 24, qrSize-16, qrSize-16);
+
+  const link = document.createElement('a');
+  link.download = 'location-tag-' + code + '.png';
+  link.href = out.toDataURL('image/png');
+  link.click();
+});
+
+document.getElementById('printBtn').addEventListener('click', () => {
+  window.print();
+});
+
+/* ---------- PWA: service worker + install prompt ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+const installBanner = document.getElementById('installBanner');
+const installBtn = document.getElementById('installBtn');
+const installTitle = document.getElementById('installTitle');
+const installSub = document.getElementById('installSub');
+
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+  || window.navigator.standalone === true;
+
+const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if(!isStandalone) installBanner.style.display = 'flex';
+});
+
+installBtn.addEventListener('click', async () => {
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installBanner.style.display = 'none';
+  }
+});
+
+// iOS has no install prompt API — show manual instructions instead.
+if(isIOS && !isStandalone){
+  installTitle.textContent = 'Add to Home Screen';
+  installSub.textContent = 'Tap the Share icon, then "Add to Home Screen".';
+  installBtn.textContent = 'Got it';
+  installBtn.addEventListener('click', () => { installBanner.style.display = 'none'; });
+  installBanner.style.display = 'flex';
+}
+</script>
+</body>
+</html>
